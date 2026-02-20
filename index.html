@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,6 +8,7 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', system-ui, sans-serif; background: #f9fafb; }
@@ -21,6 +23,10 @@
     const BLUE = "#335FFF";
     const LIME = "#CCFF00";
 
+    const SUPABASE_URL = "https://biaiirndqzjsgqzicera.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJpYWlpcm5kcXpqc2dxemljZXJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1ODY2NTIsImV4cCI6MjA4NzE2MjY1Mn0.TBiJ4e18GzczDS4ledMQzCScNSiBX5RYtZ5qe9Nwbqs";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
     const categoryKeywords = {
       "Gyms & Clubs": ["gym", "club", "fitness center", "studio", "crossfit", "boutique"],
       "Nutrition": ["nutrition", "supplement", "protein", "diet", "food", "wellness food"],
@@ -33,10 +39,10 @@
 
     function classifyArticle(title, desc) {
       const text = (title + " " + desc).toLowerCase();
-      for (const [cat, kws] of Object.entries(categoryKeywords)) {
-        if (kws.some(k => text.includes(k))) return cat;
-      }
-      return "Industry";
+      const cats = Object.entries(categoryKeywords)
+        .filter(([, kws]) => kws.some(k => text.includes(k)))
+        .map(([cat]) => cat);
+      return cats.length > 0 ? cats : ["Industry"];
     }
 
     function today() { return new Date().toISOString().split("T")[0]; }
@@ -50,17 +56,14 @@
         <div
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
-          style={{
-            background: hovered ? "#f5f7ff" : "#fff",
-            border: `1px solid ${hovered ? BLUE : "#e5e7eb"}`,
-            borderRadius: 14, padding: "20px 24px",
-            display: "flex", flexDirection: "column", gap: 10, transition: "all 0.2s",
-          }}
+          style={{ background: hovered ? "#f5f7ff" : "#fff", border: `1px solid ${hovered ? BLUE : "#e5e7eb"}`, borderRadius: 14, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 10, transition: "all 0.2s" }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-            <span style={{ background: LIME, color: "#111", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, whiteSpace: "nowrap", letterSpacing: "0.5px", textTransform: "uppercase" }}>
-              {article.category}
-            </span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {(Array.isArray(article.category) ? article.category : [article.category]).map(cat => (
+                <span key={cat} style={{ background: LIME, color: "#111", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, whiteSpace: "nowrap", letterSpacing: "0.5px", textTransform: "uppercase" }}>{cat}</span>
+              ))}
+            </div>
             <span style={{ color: "#9ca3af", fontSize: 12, whiteSpace: "nowrap" }}>{article.date}</span>
           </div>
           <h3 style={{ color: BLUE, fontSize: 16, fontWeight: 700, margin: 0, lineHeight: 1.4 }}>{article.title}</h3>
@@ -87,24 +90,35 @@
       const [unlocked, setUnlocked] = React.useState(false);
       const [tokenInput, setTokenInput] = React.useState("");
       const [tokenError, setTokenError] = React.useState(false);
-      const [articles, setArticles] = React.useState([]);
+      const [allDays, setAllDays] = React.useState({});
+      const [selectedDay, setSelectedDay] = React.useState(today());
       const [loading, setLoading] = React.useState(false);
       const [activeCategory, setActiveCategory] = React.useState("All");
       const [sortBy, setSortBy] = React.useState("relevance");
       const [error, setError] = React.useState(null);
-      const [lastUpdated, setLastUpdated] = React.useState(null);
+      const [status, setStatus] = React.useState("");
 
       React.useEffect(() => {
         if (window.location.hash.includes("access=" + ACCESS_TOKEN)) setUnlocked(true);
       }, []);
 
       React.useEffect(() => {
-        if (unlocked) fetchNews();
+        if (unlocked) loadHistory();
       }, [unlocked]);
+
+      async function loadHistory() {
+        const { data, error } = await supabase.from("news").select("date, articles").order("date", { ascending: false });
+        if (error) { setError("Could not load history: " + error.message); return; }
+        const days = {};
+        (data || []).forEach(row => { days[row.date] = JSON.parse(row.articles); });
+        setAllDays(days);
+        if (!days[today()]) fetchNews();
+      }
 
       async function fetchNews() {
         setLoading(true);
         setError(null);
+        setStatus("");
         const todayStr = today();
         try {
           const prompt = `Search for recent news about the European fitness market, gyms, wellness, nutrition, and fitness technology in Europe. Include results from Spain and Italy specifically.
@@ -125,28 +139,31 @@ Rules:
             body: JSON.stringify({ prompt }),
           });
 
-          if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`API error ${response.status}: ${errText}`);
-          }
-
           const data = await response.json();
           if (data.error) throw new Error(data.error);
           const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
           const jsonMatch = text.match(/\[[\s\S]*\]/);
-          if (!jsonMatch) throw new Error(`No JSON found. Full response: ${JSON.stringify(data).slice(0, 400)}`);
+          if (!jsonMatch) throw new Error(`No JSON found. Response: ${JSON.stringify(data).slice(0, 300)}`);
           const enriched = JSON.parse(jsonMatch[0]).map(a => ({ ...a, category: classifyArticle(a.title, a.description) }));
-          setArticles(enriched);
-          setLastUpdated(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
+
+          // Save to Supabase
+          const { error: dbError } = await supabase.from("news").upsert({ date: todayStr, articles: JSON.stringify(enriched) }, { onConflict: "date" });
+          if (dbError) setStatus("⚠ Could not save to database");
+          else setStatus("✓ Saved");
+
+          setAllDays(prev => ({ ...prev, [todayStr]: enriched }));
+          setSelectedDay(todayStr);
         } catch (e) {
           setError("Error: " + e.message);
         }
         setLoading(false);
       }
 
+      const articles = allDays[selectedDay] || [];
       const filtered = articles
-        .filter(a => activeCategory === "All" || a.category === activeCategory)
+        .filter(a => activeCategory === "All" || (Array.isArray(a.category) ? a.category.includes(activeCategory) : a.category === activeCategory))
         .sort((a, b) => sortBy === "date" ? new Date(b.date) - new Date(a.date) : 0);
+      const sortedDays = Object.keys(allDays).sort((a, b) => new Date(b) - new Date(a));
 
       if (!unlocked) {
         return (
@@ -177,47 +194,63 @@ Rules:
               <div style={{ width: 40, height: 40, borderRadius: 10, background: LIME, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🏋️</div>
               <div>
                 <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: BLUE }}>European Fitness Market News</h1>
-                {lastUpdated && <p style={{ margin: "2px 0 0", color: "#9ca3af", fontSize: 11 }}>Last updated: {lastUpdated}</p>}
+                {status && <p style={{ margin: "2px 0 0", color: status.includes("✓") ? "#16a34a" : "#d97706", fontSize: 11, fontWeight: 600 }}>{status}</p>}
               </div>
             </div>
             <button onClick={fetchNews} disabled={loading}
               style={{ padding: "10px 20px", borderRadius: 10, border: `1.5px solid ${BLUE}`, background: "#fff", color: BLUE, fontWeight: 700, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
-              {loading ? "Loading..." : "⟳ Refresh"}
+              {loading ? "Loading..." : "⟳ Refresh Today"}
             </button>
           </div>
 
-          <div style={{ padding: "24px 32px 48px", maxWidth: 900, margin: "0 auto" }}>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 24 }}>
-              {CATEGORIES.map(cat => (
-                <button key={cat} onClick={() => setActiveCategory(cat)}
-                  style={{ padding: "7px 16px", borderRadius: 20, border: "1.5px solid", borderColor: activeCategory === cat ? BLUE : "#e5e7eb", background: activeCategory === cat ? BLUE : "#fff", color: activeCategory === cat ? "#fff" : "#6b7280", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                  {cat}
+          <div style={{ display: "flex", minHeight: "calc(100vh - 77px)" }}>
+            {/* Sidebar */}
+            <div style={{ width: 180, minWidth: 180, borderRight: "1px solid #e5e7eb", padding: "24px 16px", background: "#fff", display: "flex", flexDirection: "column", gap: 6 }}>
+              <p style={{ color: "#9ca3af", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", margin: "0 0 10px" }}>History</p>
+              {sortedDays.length === 0 && <p style={{ color: "#d1d5db", fontSize: 12 }}>No saved days yet.</p>}
+              {sortedDays.map(d => (
+                <button key={d} onClick={() => { setSelectedDay(d); setActiveCategory("All"); }}
+                  style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid", borderColor: selectedDay === d ? BLUE : "#e5e7eb", background: selectedDay === d ? `${BLUE}08` : "transparent", color: selectedDay === d ? BLUE : "#6b7280", fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>
+                  {d === today() ? "Today" : formatDate(d)}
+                  <span style={{ display: "block", color: "#9ca3af", fontSize: 11, fontWeight: 400 }}>{(allDays[d] || []).length} articles</span>
                 </button>
               ))}
-              <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-                style={{ padding: "7px 14px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", color: "#374151", fontSize: 13, cursor: "pointer", outline: "none", marginLeft: "auto" }}>
-                <option value="relevance">Sort: Relevance</option>
-                <option value="date">Sort: Date</option>
-              </select>
             </div>
 
-            {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "16px 20px", color: "#dc2626", marginBottom: 24 }}>{error}</div>}
-
-            {loading ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {Array(6).fill(0).map((_, i) => <LoadingCard key={i} />)}
+            {/* Main */}
+            <div style={{ flex: 1, padding: "24px 32px 48px" }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 24 }}>
+                {CATEGORIES.map(cat => (
+                  <button key={cat} onClick={() => setActiveCategory(cat)}
+                    style={{ padding: "7px 16px", borderRadius: 20, border: "1.5px solid", borderColor: activeCategory === cat ? BLUE : "#e5e7eb", background: activeCategory === cat ? BLUE : "#fff", color: activeCategory === cat ? "#fff" : "#6b7280", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                    {cat}
+                  </button>
+                ))}
+                <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                  style={{ padding: "7px 14px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", color: "#374151", fontSize: 13, cursor: "pointer", outline: "none", marginLeft: "auto" }}>
+                  <option value="relevance">Sort: Relevance</option>
+                  <option value="date">Sort: Date</option>
+                </select>
               </div>
-            ) : (
-              <>
-                <p style={{ color: "#6b7280", fontSize: 13, marginBottom: 20 }}>
-                  <span style={{ color: BLUE, fontWeight: 700 }}>{filtered.length}</span> article{filtered.length !== 1 ? "s" : ""}
-                </p>
+
+              {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "16px 20px", color: "#dc2626", marginBottom: 24 }}>{error}</div>}
+
+              {loading ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  {filtered.map((a, i) => <NewsCard key={i} article={a} />)}
+                  {Array(6).fill(0).map((_, i) => <LoadingCard key={i} />)}
                 </div>
-                {filtered.length === 0 && <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af" }}>No articles found in this category.</div>}
-              </>
-            )}
+              ) : (
+                <>
+                  <p style={{ color: "#6b7280", fontSize: 13, marginBottom: 20 }}>
+                    <span style={{ color: BLUE, fontWeight: 700 }}>{filtered.length}</span> article{filtered.length !== 1 ? "s" : ""} — {selectedDay === today() ? <span style={{ color: BLUE, fontWeight: 700 }}>Today</span> : formatDate(selectedDay)}
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {filtered.map((a, i) => <NewsCard key={i} article={a} />)}
+                  </div>
+                  {filtered.length === 0 && <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af" }}>No articles found.</div>}
+                </>
+              )}
+            </div>
           </div>
         </div>
       );
