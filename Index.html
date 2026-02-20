@@ -1,0 +1,230 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>European Fitness Market News</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: #f9fafb; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const ACCESS_TOKEN = "efm2026";
+    const CATEGORIES = ["All", "Gyms & Clubs", "Nutrition", "Fitness Tech", "Wellness", "Industry", "Spain", "Italy"];
+    const BLUE = "#335FFF";
+    const LIME = "#CCFF00";
+
+    const categoryKeywords = {
+      "Gyms & Clubs": ["gym", "club", "fitness center", "studio", "crossfit", "boutique"],
+      "Nutrition": ["nutrition", "supplement", "protein", "diet", "food", "wellness food"],
+      "Fitness Tech": ["app", "wearable", "technology", "digital", "ai", "software", "platform"],
+      "Wellness": ["wellness", "mental health", "yoga", "pilates", "spa", "recovery"],
+      "Spain": ["spain", "españa", "spanish", "madrid", "barcelona", "valencia", "seville", "bilbao"],
+      "Italy": ["italy", "italia", "italian", "rome", "milan", "milano", "turin", "torino", "naples"],
+      "Industry": ["market", "investment", "acquisition", "revenue", "growth", "trend", "report"],
+    };
+
+    function classifyArticle(title, desc) {
+      const text = (title + " " + desc).toLowerCase();
+      for (const [cat, kws] of Object.entries(categoryKeywords)) {
+        if (kws.some(k => text.includes(k))) return cat;
+      }
+      return "Industry";
+    }
+
+    function today() { return new Date().toISOString().split("T")[0]; }
+    function formatDate(d) {
+      return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    }
+
+    function NewsCard({ article }) {
+      const [hovered, setHovered] = React.useState(false);
+      return (
+        <div
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          style={{
+            background: hovered ? "#f5f7ff" : "#fff",
+            border: `1px solid ${hovered ? BLUE : "#e5e7eb"}`,
+            borderRadius: 14, padding: "20px 24px",
+            display: "flex", flexDirection: "column", gap: 10, transition: "all 0.2s",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <span style={{ background: LIME, color: "#111", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, whiteSpace: "nowrap", letterSpacing: "0.5px", textTransform: "uppercase" }}>
+              {article.category}
+            </span>
+            <span style={{ color: "#9ca3af", fontSize: 12, whiteSpace: "nowrap" }}>{article.date}</span>
+          </div>
+          <h3 style={{ color: BLUE, fontSize: 16, fontWeight: 700, margin: 0, lineHeight: 1.4 }}>{article.title}</h3>
+          <p style={{ color: "#374151", fontSize: 14, margin: 0, lineHeight: 1.6 }}>{article.description}</p>
+          <a href={article.url} target="_blank" rel="noopener noreferrer"
+            style={{ color: BLUE, fontSize: 13, fontWeight: 700, textDecoration: "none", marginTop: 4, width: "fit-content" }}>
+            Read full article →
+          </a>
+        </div>
+      );
+    }
+
+    function LoadingCard() {
+      return (
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
+          {[100, 70, 90].map((w, i) => (
+            <div key={i} style={{ height: i === 1 ? 20 : 14, width: `${w}%`, background: "linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 50%,#f3f4f6 75%)", backgroundSize: "200% 100%", borderRadius: 6, animation: "shimmer 1.5s infinite" }} />
+          ))}
+        </div>
+      );
+    }
+
+    function App() {
+      const [unlocked, setUnlocked] = React.useState(false);
+      const [tokenInput, setTokenInput] = React.useState("");
+      const [tokenError, setTokenError] = React.useState(false);
+      const [articles, setArticles] = React.useState([]);
+      const [loading, setLoading] = React.useState(false);
+      const [activeCategory, setActiveCategory] = React.useState("All");
+      const [sortBy, setSortBy] = React.useState("relevance");
+      const [error, setError] = React.useState(null);
+      const [lastUpdated, setLastUpdated] = React.useState(null);
+
+      React.useEffect(() => {
+        if (window.location.hash.includes("access=" + ACCESS_TOKEN)) setUnlocked(true);
+      }, []);
+
+      React.useEffect(() => {
+        if (unlocked) fetchNews();
+      }, [unlocked]);
+
+      async function fetchNews() {
+        setLoading(true);
+        setError(null);
+        const todayStr = today();
+        try {
+          const prompt = `Search for recent news about the European fitness market, gyms, wellness, nutrition, and fitness technology in Europe. Include results from Spain and Italy specifically.
+
+Then output a JSON array of 12 articles. Use this exact format with no extra text, no apologies, no markdown, no explanation — just the raw JSON array:
+
+[{"title":"...","description":"2-3 sentence summary","url":"https://...","source":"...","date":"${todayStr}"},...]
+
+Rules:
+- Include at least 2 articles from Spain and 2 from Italy
+- If some articles are older than 7 days, include them anyway
+- Never apologize or explain — output ONLY the JSON array starting with [ and ending with ]
+- Do not wrap in markdown code blocks`;
+
+          const response = await fetch("/api/fetch-news", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt }),
+          });
+
+          if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`API error ${response.status}: ${errText}`);
+          }
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+          const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+          const jsonMatch = text.match(/\[[\s\S]*\]/);
+          if (!jsonMatch) throw new Error(`No JSON found. Full response: ${JSON.stringify(data).slice(0, 400)}`);
+          const enriched = JSON.parse(jsonMatch[0]).map(a => ({ ...a, category: classifyArticle(a.title, a.description) }));
+          setArticles(enriched);
+          setLastUpdated(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
+        } catch (e) {
+          setError("Error: " + e.message);
+        }
+        setLoading(false);
+      }
+
+      const filtered = articles
+        .filter(a => activeCategory === "All" || a.category === activeCategory)
+        .sort((a, b) => sortBy === "date" ? new Date(b.date) - new Date(a.date) : 0);
+
+      if (!unlocked) {
+        return (
+          <div style={{ minHeight: "100vh", background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 20, padding: "48px 40px", maxWidth: 400, width: "100%", textAlign: "center", boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}>
+              <div style={{ width: 64, height: 64, borderRadius: 16, background: LIME, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, margin: "0 auto 20px" }}>🏋️</div>
+              <h1 style={{ color: BLUE, fontSize: 22, fontWeight: 800, margin: "0 0 8px" }}>European Fitness Market News</h1>
+              <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 32 }}>Private feed. Enter your access code to continue.</p>
+              <input type="password" placeholder="Access code" value={tokenInput}
+                onChange={e => { setTokenInput(e.target.value); setTokenError(false); }}
+                onKeyDown={e => { if (e.key === "Enter") { if (tokenInput === ACCESS_TOKEN) setUnlocked(true); else setTokenError(true); } }}
+                style={{ width: "100%", padding: "12px 16px", borderRadius: 10, border: tokenError ? "1px solid #ef4444" : "1px solid #d1d5db", background: "#f9fafb", color: "#111", fontSize: 15, outline: "none", marginBottom: 12 }}
+              />
+              {tokenError && <p style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>Incorrect code. Try again.</p>}
+              <button onClick={() => { if (tokenInput === ACCESS_TOKEN) setUnlocked(true); else setTokenError(true); }}
+                style={{ width: "100%", padding: "12px", borderRadius: 10, border: "none", background: BLUE, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+                Enter
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div style={{ minHeight: "100vh", background: "#f9fafb" }}>
+          <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "18px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: LIME, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🏋️</div>
+              <div>
+                <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: BLUE }}>European Fitness Market News</h1>
+                {lastUpdated && <p style={{ margin: "2px 0 0", color: "#9ca3af", fontSize: 11 }}>Last updated: {lastUpdated}</p>}
+              </div>
+            </div>
+            <button onClick={fetchNews} disabled={loading}
+              style={{ padding: "10px 20px", borderRadius: 10, border: `1.5px solid ${BLUE}`, background: "#fff", color: BLUE, fontWeight: 700, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
+              {loading ? "Loading..." : "⟳ Refresh"}
+            </button>
+          </div>
+
+          <div style={{ padding: "24px 32px 48px", maxWidth: 900, margin: "0 auto" }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 24 }}>
+              {CATEGORIES.map(cat => (
+                <button key={cat} onClick={() => setActiveCategory(cat)}
+                  style={{ padding: "7px 16px", borderRadius: 20, border: "1.5px solid", borderColor: activeCategory === cat ? BLUE : "#e5e7eb", background: activeCategory === cat ? BLUE : "#fff", color: activeCategory === cat ? "#fff" : "#6b7280", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  {cat}
+                </button>
+              ))}
+              <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                style={{ padding: "7px 14px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", color: "#374151", fontSize: 13, cursor: "pointer", outline: "none", marginLeft: "auto" }}>
+                <option value="relevance">Sort: Relevance</option>
+                <option value="date">Sort: Date</option>
+              </select>
+            </div>
+
+            {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "16px 20px", color: "#dc2626", marginBottom: 24 }}>{error}</div>}
+
+            {loading ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {Array(6).fill(0).map((_, i) => <LoadingCard key={i} />)}
+              </div>
+            ) : (
+              <>
+                <p style={{ color: "#6b7280", fontSize: 13, marginBottom: 20 }}>
+                  <span style={{ color: BLUE, fontWeight: 700 }}>{filtered.length}</span> article{filtered.length !== 1 ? "s" : ""}
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {filtered.map((a, i) => <NewsCard key={i} article={a} />)}
+                </div>
+                {filtered.length === 0 && <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af" }}>No articles found in this category.</div>}
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
