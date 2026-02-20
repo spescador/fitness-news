@@ -232,10 +232,16 @@ Rules:
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", color: "#374151", fontSize: 13, cursor: "pointer", outline: "none" }}>
+                <option value="date">Sort: Date</option>
+                <option value="relevance">Sort: Relevance</option>
+              </select>
               <button onClick={() => setSidebarOpen(o => !o)}
                 style={{ padding: "10px 16px", borderRadius: 10, border: "1.5px solid #e5e7eb", background: sidebarOpen ? "#f3f4f6" : "#fff", color: "#6b7280", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                 {sidebarOpen ? "✕ History" : "📅 History"}
               </button>
+            </div>
               <button onClick={fetchNews} disabled={loading}
                 style={{ padding: "10px 20px", borderRadius: 10, border: `1.5px solid ${BLUE}`, background: "#fff", color: BLUE, fontWeight: 700, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}
               title="Available at 10:00 and 13:00 CET">
@@ -267,11 +273,6 @@ Rules:
                     {cat}
                   </button>
                 ))}
-                <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-                  style={{ padding: "7px 14px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", color: "#374151", fontSize: 13, cursor: "pointer", outline: "none", marginLeft: "auto" }}>
-                  <option value="date">Sort: Date</option>
-                  <option value="relevance">Sort: Relevance</option>
-                </select>
               </div>
 
               {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "16px 20px", color: "#dc2626", marginBottom: 24 }}>{error}</div>}
