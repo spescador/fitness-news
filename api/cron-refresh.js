@@ -22,14 +22,14 @@ module.exports = async function handler(req, res) {
         "anthropic-beta": "web-search-2025-03-05",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 4000,
+        model: "claude-sonnet-4-5",
+        max_tokens: 2000,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{
           role: "user",
-          content: `Search for European fitness market news published in February 2026 or January 2026. Include news from Spain and Italy. Today is ${today}. Return ONLY a JSON array:
-[{"title":"...","description":"1-2 sentences","url":"https://...","source":"...","date":"YYYY-MM-DD","relevance":8}]
-Output 12 items. Use the real publication date of each article in YYYY-MM-DD format. Score each article with a "relevance" field from 1-10. No markdown. No explanation. Just the JSON array.`
+          content: `Search recent European fitness industry news. Today is ${today}. Output ONLY a JSON array of 12 items, no other text:
+[{"title":"...","description":"1-2 sentences","url":"https://...","source":"...","date":"YYYY-MM-DD","relevance":7}]
+Use real publication dates. Score relevance 1-10. JSON only.`
         }],
       }),
     });
