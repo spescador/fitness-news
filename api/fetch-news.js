@@ -22,8 +22,8 @@ export default async function handler(req, res) {
         messages: [{
           role: "user",
           content: `Search European fitness market news 2025. Include Spain and Italy. Return ONLY a JSON array:
-[{"title":"...","description":"1-2 sentences","url":"https://...","source":"...","date":"${today}"}]
-Output 12 items. No markdown. No explanation. Just the JSON array.`
+[{"title":"...","description":"1-2 sentences","url":"https://...","source":"...","date":"${today}","relevance":8}]
+Output 12 items. Score each article with a "relevance" field from 1-10 based on importance and impact for the European fitness industry. No markdown. No explanation. Just the JSON array.`
         }],
       }),
     });
