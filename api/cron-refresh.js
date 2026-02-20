@@ -27,9 +27,9 @@ module.exports = async function handler(req, res) {
         tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{
           role: "user",
-          content: `Search European fitness market news 2025. Include Spain and Italy. Return ONLY a JSON array:
-[{"title":"...","description":"1-2 sentences","url":"https://...","source":"...","date":"${today}","relevance":8}]
-Output 12 items. Score each article with a "relevance" field from 1-10 based on importance and impact for the European fitness industry. No markdown. No explanation. Just the JSON array.`
+          content: `Search for European fitness market news published in February 2026 or January 2026. Include news from Spain and Italy. Today is ${today}. Return ONLY a JSON array:
+[{"title":"...","description":"1-2 sentences","url":"https://...","source":"...","date":"YYYY-MM-DD","relevance":8}]
+Output 12 items. Use the real publication date of each article in YYYY-MM-DD format. Score each article with a "relevance" field from 1-10. No markdown. No explanation. Just the JSON array.`
         }],
       }),
     });
