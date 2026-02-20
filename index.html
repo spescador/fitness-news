@@ -120,7 +120,7 @@
           const cats = Array.isArray(a.category) ? a.category : [a.category];
           return cats.includes(activeCategory);
         })
-        .sort((a, b) => sortBy === "date" ? new Date(b.date) - new Date(a.date) : 0);
+        .sort((a, b) => sortBy === "date" ? new Date(b.date) - new Date(a.date) : (b.relevance || 5) - (a.relevance || 5));
 
       const sortedDays = Object.keys(allDays).sort((a, b) => new Date(b) - new Date(a));
 
