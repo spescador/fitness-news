@@ -148,7 +148,7 @@ Rules:
 
           // Save to Supabase
           const { error: dbError } = await supabase.from("news").upsert({ date: todayStr, articles: JSON.stringify(enriched) }, { onConflict: "date" });
-          if (dbError) setStatus("⚠ Could not save to database");
+          if (dbError) setStatus("⚠ " + dbError.message);
           else setStatus("✓ Saved");
 
           setAllDays(prev => ({ ...prev, [todayStr]: enriched }));
