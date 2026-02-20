@@ -27,9 +27,11 @@ module.exports = async function handler(req, res) {
         tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{
           role: "user",
-          content: `Today is ${today}. Search the web for "European fitness market news February 2026", then search for "fitness industry Europe 2026", then search for "gym wellness news Spain Italy 2026". Use all search results to compile a list of 12 recent articles. Output ONLY a JSON array, no other text:
+          content: `Today is ${today}. Search for recent European fitness market news from these sources: site:2playbook.com fitness, site:fitnessbusinesseurope.com, site:ihrsa.org europe, site:clublndustry.com europe. Also search "European fitness market news 2026" and "fitness industry Spain Italy 2026".
+
+Output ONLY a JSON array of 12 items, no other text:
 [{"title":"...","description":"1-2 sentences","url":"https://...","source":"...","date":"YYYY-MM-DD","relevance":7}]
-Only include articles published in 2026. Use real publication dates. Score relevance 1-10. JSON only.`
+Use real publication dates. Score relevance 1-10. JSON only.`
         }],
       }),
     });
