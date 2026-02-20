@@ -148,7 +148,6 @@ Rules:
           const jsonMatch = text.match(/\[[\s\S]*\]/);
           if (!jsonMatch) throw new Error(`No JSON found. Response: ${JSON.stringify(data).slice(0, 300)}`);
           const enriched = JSON.parse(jsonMatch[0])
-            .filter(a => new Date(a.date) >= sixMonthsAgo)
             .slice(0, 20)
             .map(a => ({ ...a, category: classifyArticle(a.title, a.description) }));
 
