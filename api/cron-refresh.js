@@ -1,20 +1,18 @@
-import { createClient } from "@supabase/supabase-js";
+const { createClient } = require("@supabase/supabase-js");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
-
-export default async function handler(req, res) {
-  // Security check: only allow Vercel cron calls
+module.exports = async function handler(req, res) {
   if (req.headers["authorization"] !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_KEY
+    );
+
     const today = new Date().toISOString().split("T")[0];
 
-    // Fetch news from Anthropic
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -30,8 +28,8 @@ export default async function handler(req, res) {
         messages: [{
           role: "user",
           content: `Search European fitness market news 2025. Include Spain and Italy. Return ONLY a JSON array:
-[{"title":"...","description":"1-2 sentences","url":"https://...","source":"...","date":"${today}"}]
-Output 12 items. No markdown. No explanation. Just the JSON array.`
+[{"title":"...","description":"1-2 sentences","url":"https://...","source":"...","date":"${today}","relevance":8}]
+Output 12 items. Score each article with a "relevance" field from 1-10 based on importance and impact for the European fitness industry. No markdown. No explanation. Just the JSON array.`
         }],
       }),
     });
@@ -41,11 +39,13 @@ Output 12 items. No markdown. No explanation. Just the JSON array.`
 
     const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error("No JSON found in response");
+    if (!jsonMatch) throw new Error("No JSON found: " + text.slice(0, 200));
 
-    const articles = JSON.parse(jsonMatch[0]);
+    const articles = JSON.parse(jsonMatch[0]).map(a => ({
+      ...a,
+      category: classifyArticle(a.title, a.description)
+    }));
 
-    // Save to Supabase
     const { error: dbError } = await supabase
       .from("news")
       .upsert({ date: today, articles: JSON.stringify(articles) }, { onConflict: "date" });
@@ -56,4 +56,22 @@ Output 12 items. No markdown. No explanation. Just the JSON array.`
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
+};
+
+const categoryKeywords = {
+  "Gyms & Clubs": ["gym", "club", "fitness center", "studio", "crossfit", "boutique"],
+  "Nutrition": ["nutrition", "supplement", "protein", "diet", "food", "wellness food"],
+  "Fitness Tech": ["app", "wearable", "technology", "digital", "ai", "software", "platform"],
+  "Wellness": ["wellness", "mental health", "yoga", "pilates", "spa", "recovery"],
+  "Spain": ["spain", "españa", "spanish", "madrid", "barcelona", "valencia", "seville", "bilbao"],
+  "Italy": ["italy", "italia", "italian", "rome", "milan", "milano", "turin", "torino", "naples"],
+  "Industry": ["market", "investment", "acquisition", "revenue", "growth", "trend", "report"],
+};
+
+function classifyArticle(title, desc) {
+  const text = (title + " " + desc).toLowerCase();
+  const cats = Object.entries(categoryKeywords)
+    .filter(([, kws]) => kws.some(k => text.includes(k)))
+    .map(([cat]) => cat);
+  return cats.length > 0 ? cats : ["Industry"];
 }
