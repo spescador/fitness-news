@@ -111,16 +111,29 @@
         if (unlocked) loadHistory();
       }, [unlocked]);
 
+      function isRefreshAllowed() {
+        const now = new Date();
+        const cetHour = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Madrid" })).getHours();
+        const cetMin = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Madrid" })).getMinutes();
+        const timeInMin = cetHour * 60 + cetMin;
+        // Allow 10:00-10:30 and 13:00-13:30 CET
+        return (timeInMin >= 600 && timeInMin < 630) || (timeInMin >= 780 && timeInMin < 810);
+      }
+
       async function loadHistory() {
         const { data, error } = await supabase.from("news").select("date, articles").order("date", { ascending: false });
         if (error) { setError("Could not load history: " + error.message); return; }
         const days = {};
         (data || []).forEach(row => { days[row.date] = JSON.parse(row.articles); });
         setAllDays(days);
-        
+        // Do NOT auto-fetch — only load from database
       }
 
       async function fetchNews() {
+        if (!isRefreshAllowed()) {
+          setError("Refresh is only available at 10:00 and 13:00 CET (±30 min).");
+          return;
+        }
         setLoading(true);
         setError(null);
         setStatus("");
@@ -218,13 +231,14 @@ Rules:
                 {status && <p style={{ margin: "2px 0 0", color: status.includes("✓") ? "#16a34a" : "#d97706", fontSize: 11, fontWeight: 600 }}>{status}</p>}
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <button onClick={() => setSidebarOpen(o => !o)}
                 style={{ padding: "10px 16px", borderRadius: 10, border: "1.5px solid #e5e7eb", background: sidebarOpen ? "#f3f4f6" : "#fff", color: "#6b7280", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                 {sidebarOpen ? "✕ History" : "📅 History"}
               </button>
               <button onClick={fetchNews} disabled={loading}
-                style={{ padding: "10px 20px", borderRadius: 10, border: `1.5px solid ${BLUE}`, background: "#fff", color: BLUE, fontWeight: 700, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
+                style={{ padding: "10px 20px", borderRadius: 10, border: `1.5px solid ${BLUE}`, background: "#fff", color: BLUE, fontWeight: 700, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}
+              title="Available at 10:00 and 13:00 CET">
                 {loading ? "Loading..." : "⟳ Refresh"}
               </button>
             </div>
@@ -245,7 +259,7 @@ Rules:
             </div>
             )}
 
-            <div style={{ flex: 1, padding: "24px 32px 48px" }}>
+            <div style={{ flex: 1, padding: "24px 32px 48px", maxWidth: 860, margin: "0 auto", width: "100%" }}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 24 }}>
                 {CATEGORIES.map(cat => (
                   <button key={cat} onClick={() => setActiveCategory(cat)}
