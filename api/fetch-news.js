@@ -6,9 +6,6 @@ export default async function handler(req, res) {
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     const today = new Date().toISOString().split("T")[0];
-    const sixAgo = new Date();
-    sixAgo.setMonth(sixAgo.getMonth() - 6);
-    const sixAgoStr = sixAgo.toISOString().split("T")[0];
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -19,13 +16,14 @@ export default async function handler(req, res) {
         "anthropic-beta": "web-search-2025-03-05",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-5",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 4000,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{
           role: "user",
-          content: `Search for 12 recent European fitness market news articles from after ${sixAgoStr}. Include Spain and Italy. Output ONLY a JSON array, no markdown:
-[{"title":"...","description":"1-2 sentence summary","url":"https://...","source":"...","date":"${today}"},...]`
+          content: `Search European fitness market news 2025. Include Spain and Italy. Return ONLY a JSON array:
+[{"title":"...","description":"1-2 sentences","url":"https://...","source":"...","date":"${today}"}]
+Output 12 items. No markdown. No explanation. Just the JSON array.`
         }],
       }),
     });
