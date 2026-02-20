@@ -21,7 +21,6 @@
     const CATEGORIES = ["All", "Gyms & Clubs", "Nutrition", "Fitness Tech", "Wellness", "Industry", "Spain", "Italy"];
     const BLUE = "#335FFF";
     const LIME = "#CCFF00";
-
     const SUPABASE_URL = "https://biaiirndqzjsgqzicera.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJpYWlpcm5kcXpqc2dxemljZXJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1ODY2NTIsImV4cCI6MjA4NzE2MjY1Mn0.TBiJ4e18GzczDS4ledMQzCScNSiBX5RYtZ5qe9Nwbqs";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -44,13 +43,19 @@
       return cats.length > 0 ? cats : ["Industry"];
     }
 
-    function today() { return new Date().toISOString().split("T")[0]; }
+    function todayStr() { return new Date().toISOString().split("T")[0]; }
+    function sixMonthsAgoStr() {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 6);
+      return d.toISOString().split("T")[0];
+    }
     function formatDate(d) {
       return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
     }
 
     function NewsCard({ article }) {
       const [hovered, setHovered] = React.useState(false);
+      const cats = Array.isArray(article.category) ? article.category : [article.category];
       return (
         <div
           onMouseEnter={() => setHovered(true)}
@@ -59,7 +64,7 @@
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {(Array.isArray(article.category) ? article.category : [article.category]).map(cat => (
+              {cats.map(cat => (
                 <span key={cat} style={{ background: LIME, color: "#111", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, whiteSpace: "nowrap", letterSpacing: "0.5px", textTransform: "uppercase" }}>{cat}</span>
               ))}
             </div>
@@ -90,12 +95,13 @@
       const [tokenInput, setTokenInput] = React.useState("");
       const [tokenError, setTokenError] = React.useState(false);
       const [allDays, setAllDays] = React.useState({});
-      const [selectedDay, setSelectedDay] = React.useState(today());
+      const [selectedDay, setSelectedDay] = React.useState(todayStr());
       const [loading, setLoading] = React.useState(false);
       const [activeCategory, setActiveCategory] = React.useState("All");
       const [sortBy, setSortBy] = React.useState("date");
       const [error, setError] = React.useState(null);
       const [status, setStatus] = React.useState("");
+      const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
       React.useEffect(() => {
         if (window.location.hash.includes("access=" + ACCESS_TOKEN)) setUnlocked(true);
@@ -111,31 +117,32 @@
         const days = {};
         (data || []).forEach(row => { days[row.date] = JSON.parse(row.articles); });
         setAllDays(days);
-        if (!days[today()]) fetchNews();
+        if (!days[todayStr()]) fetchNews();
       }
 
       async function fetchNews() {
         setLoading(true);
         setError(null);
         setStatus("");
-        const todayStr = today();
-        try {
-          const sixMonthsAgoStr = sixMonthsAgo.toISOString().split("T")[0];
-          const prompt = `Search for the 20 most recent news articles about the European fitness market published in the last 6 months (after ${sixMonthsAgoStr}). Include news about gyms, fitness clubs, nutrition, fitness technology, wellness, investments, and market trends in Europe. Include results specifically from Spain and Italy.
+        const today = todayStr();
+        const sixAgo = sixMonthsAgoStr();
 
-IMPORTANT: Only include articles published after ${sixMonthsAgoStr}. Do not include older articles.
+        const prompt = `Search for the 20 most recent news articles about the European fitness market published after ${sixAgo}. Include news about gyms, fitness clubs, nutrition, fitness technology, wellness, investments, and market trends in Europe. Include results specifically from Spain and Italy.
 
-Output ONLY a raw JSON array of exactly 20 articles with no extra text, no apologies, no markdown, no explanation:
+IMPORTANT: Only include articles published after ${sixAgo}. Do not include older articles.
+
+Output ONLY a raw JSON array of exactly 20 articles with no extra text, no apologies, no markdown:
 
 [{"title":"...","description":"2-3 sentence summary","url":"https://...","source":"...","date":"YYYY-MM-DD"},...]
 
 Rules:
 - Include at least 2 articles from Spain and 2 from Italy
 - Every article must have a real publication date in YYYY-MM-DD format
-- No articles older than ${sixMonthsAgoStr}
+- No articles older than ${sixAgo}
 - Output ONLY the JSON array starting with [ and ending with ]
 - Do not wrap in markdown code blocks`;
 
+        try {
           const response = await fetch("/api/fetch-news", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -144,20 +151,24 @@ Rules:
 
           const data = await response.json();
           if (data.error) throw new Error(data.error);
+
           const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
           const jsonMatch = text.match(/\[[\s\S]*\]/);
           if (!jsonMatch) throw new Error(`No JSON found. Response: ${JSON.stringify(data).slice(0, 300)}`);
+
           const enriched = JSON.parse(jsonMatch[0])
             .slice(0, 20)
             .map(a => ({ ...a, category: classifyArticle(a.title, a.description) }));
 
-          // Save to Supabase
-          const { error: dbError } = await supabase.from("news").upsert({ date: todayStr, articles: JSON.stringify(enriched) }, { onConflict: "date" });
+          const { error: dbError } = await supabase
+            .from("news")
+            .upsert({ date: today, articles: JSON.stringify(enriched) }, { onConflict: "date" });
+
           if (dbError) setStatus("⚠ " + dbError.message);
           else setStatus("✓ Saved");
 
-          setAllDays(prev => ({ ...prev, [todayStr]: enriched }));
-          setSelectedDay(todayStr);
+          setAllDays(prev => ({ ...prev, [today]: enriched }));
+          setSelectedDay(today);
         } catch (e) {
           setError("Error: " + e.message);
         }
@@ -166,8 +177,13 @@ Rules:
 
       const articles = allDays[selectedDay] || [];
       const filtered = articles
-        .filter(a => activeCategory === "All" || (Array.isArray(a.category) ? a.category.includes(activeCategory) : a.category === activeCategory))
+        .filter(a => {
+          if (activeCategory === "All") return true;
+          const cats = Array.isArray(a.category) ? a.category : [a.category];
+          return cats.includes(activeCategory);
+        })
         .sort((a, b) => sortBy === "date" ? new Date(b.date) - new Date(a.date) : 0);
+
       const sortedDays = Object.keys(allDays).sort((a, b) => new Date(b) - new Date(a));
 
       if (!unlocked) {
@@ -202,27 +218,33 @@ Rules:
                 {status && <p style={{ margin: "2px 0 0", color: status.includes("✓") ? "#16a34a" : "#d97706", fontSize: 11, fontWeight: 600 }}>{status}</p>}
               </div>
             </div>
-            <button onClick={fetchNews} disabled={loading}
-              style={{ padding: "10px 20px", borderRadius: 10, border: `1.5px solid ${BLUE}`, background: "#fff", color: BLUE, fontWeight: 700, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
-              {loading ? "Loading..." : "⟳ Refresh Today"}
-            </button>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <button onClick={() => setSidebarOpen(o => !o)}
+                style={{ padding: "10px 16px", borderRadius: 10, border: "1.5px solid #e5e7eb", background: sidebarOpen ? "#f3f4f6" : "#fff", color: "#6b7280", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                {sidebarOpen ? "✕ History" : "📅 History"}
+              </button>
+              <button onClick={fetchNews} disabled={loading}
+                style={{ padding: "10px 20px", borderRadius: 10, border: `1.5px solid ${BLUE}`, background: "#fff", color: BLUE, fontWeight: 700, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
+                {loading ? "Loading..." : "⟳ Refresh"}
+              </button>
+            </div>
           </div>
 
           <div style={{ display: "flex", minHeight: "calc(100vh - 77px)" }}>
-            {/* Sidebar */}
-            <div style={{ width: 180, minWidth: 180, borderRight: "1px solid #e5e7eb", padding: "24px 16px", background: "#fff", display: "flex", flexDirection: "column", gap: 6 }}>
+            {sidebarOpen && (
+            <div style={{ width: 180, minWidth: 180, borderRight: "1px solid #e5e7eb", padding: "24px 16px", background: "#fff", display: "flex", flexDirection: "column", gap: 6, position: "absolute", zIndex: 100, top: 77, bottom: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.08)" }}>
               <p style={{ color: "#9ca3af", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", margin: "0 0 10px" }}>History</p>
               {sortedDays.length === 0 && <p style={{ color: "#d1d5db", fontSize: 12 }}>No saved days yet.</p>}
               {sortedDays.map(d => (
-                <button key={d} onClick={() => { setSelectedDay(d); setActiveCategory("All"); }}
+                <button key={d} onClick={() => { setSelectedDay(d); setActiveCategory("All"); setSidebarOpen(false); }}
                   style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid", borderColor: selectedDay === d ? BLUE : "#e5e7eb", background: selectedDay === d ? `${BLUE}08` : "transparent", color: selectedDay === d ? BLUE : "#6b7280", fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>
-                  {d === today() ? "Today" : formatDate(d)}
+                  {d === todayStr() ? "Today" : formatDate(d)}
                   <span style={{ display: "block", color: "#9ca3af", fontSize: 11, fontWeight: 400 }}>{(allDays[d] || []).length} articles</span>
                 </button>
               ))}
             </div>
+            )}
 
-            {/* Main */}
             <div style={{ flex: 1, padding: "24px 32px 48px" }}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 24 }}>
                 {CATEGORIES.map(cat => (
@@ -233,8 +255,8 @@ Rules:
                 ))}
                 <select value={sortBy} onChange={e => setSortBy(e.target.value)}
                   style={{ padding: "7px 14px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", color: "#374151", fontSize: 13, cursor: "pointer", outline: "none", marginLeft: "auto" }}>
-                  <option value="relevance">Sort: Relevance</option>
                   <option value="date">Sort: Date</option>
+                  <option value="relevance">Sort: Relevance</option>
                 </select>
               </div>
 
@@ -247,7 +269,7 @@ Rules:
               ) : (
                 <>
                   <p style={{ color: "#6b7280", fontSize: 13, marginBottom: 20 }}>
-                    <span style={{ color: BLUE, fontWeight: 700 }}>{filtered.length}</span> article{filtered.length !== 1 ? "s" : ""} — {selectedDay === today() ? <span style={{ color: BLUE, fontWeight: 700 }}>Today</span> : formatDate(selectedDay)}
+                    <span style={{ color: BLUE, fontWeight: 700 }}>{filtered.length}</span> article{filtered.length !== 1 ? "s" : ""} — {selectedDay === todayStr() ? <span style={{ color: BLUE, fontWeight: 700 }}>Today</span> : formatDate(selectedDay)}
                   </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                     {filtered.map((a, i) => <NewsCard key={i} article={a} />)}
