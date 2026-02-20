@@ -120,16 +120,20 @@
         setStatus("");
         const todayStr = today();
         try {
-          const prompt = `Search for recent news about the European fitness market, gyms, wellness, nutrition, and fitness technology in Europe. Include results from Spain and Italy specifically.
+          const sixMonthsAgoStr = sixMonthsAgo.toISOString().split("T")[0];
+          const prompt = `Search for the 20 most recent news articles about the European fitness market published in the last 6 months (after ${sixMonthsAgoStr}). Include news about gyms, fitness clubs, nutrition, fitness technology, wellness, investments, and market trends in Europe. Include results specifically from Spain and Italy.
 
-Then output a JSON array of 20 articles. Use this exact format with no extra text, no apologies, no markdown, no explanation — just the raw JSON array:
+IMPORTANT: Only include articles published after ${sixMonthsAgoStr}. Do not include older articles.
 
-[{"title":"...","description":"2-3 sentence summary","url":"https://...","source":"...","date":"${todayStr}"},...]
+Output ONLY a raw JSON array of exactly 20 articles with no extra text, no apologies, no markdown, no explanation:
+
+[{"title":"...","description":"2-3 sentence summary","url":"https://...","source":"...","date":"YYYY-MM-DD"},...]
 
 Rules:
 - Include at least 2 articles from Spain and 2 from Italy
-- If some articles are older than 7 days, include them anyway
-- Never apologize or explain — output ONLY the JSON array starting with [ and ending with ]
+- Every article must have a real publication date in YYYY-MM-DD format
+- No articles older than ${sixMonthsAgoStr}
+- Output ONLY the JSON array starting with [ and ending with ]
 - Do not wrap in markdown code blocks`;
 
           const response = await fetch("/api/fetch-news", {
