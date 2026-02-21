@@ -35,7 +35,8 @@ JSON only, no markdown.`
     if (!response.ok) throw new Error(`API error: ${JSON.stringify(data)}`);
 
     const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    const cleaned = text.replace(/```json|```/g, "").trim();
+    const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error("No JSON found: " + text.slice(0, 200));
 
     const articles = JSON.parse(jsonMatch[0]).map(a => ({
