@@ -19,16 +19,14 @@ module.exports = async function handler(req, res) {
         "anthropic-beta": "web-search-2025-03-05",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-5",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 2000,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{
           role: "user",
-          content: `Today is ${today}. Search for recent European fitness market news from these sources: site:2playbook.com fitness, site:fitnessbusinesseurope.com, site:ihrsa.org europe, site:clublndustry.com europe. Also search "European fitness market news 2026" and "fitness industry Spain Italy 2026".
-
-Output ONLY a JSON array of 12 items, no other text:
+          content: `Search 2playbook.com/fitness and European fitness market news ${today}. Output ONLY JSON array of 12 items:
 [{"title":"...","description":"1-2 sentences","url":"https://...","source":"...","date":"YYYY-MM-DD","relevance":7}]
-Use real publication dates. Score relevance 1-10. JSON only.`
+JSON only, no markdown.`
         }],
       }),
     });
